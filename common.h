@@ -1,4 +1,5 @@
 #include <iostream>
+#include <string>
 #include <cstring>
 #include <cstdlib>
 #include <cstdio>
@@ -67,3 +68,6 @@ static void connect_alarm(int signo);
 int my_open(const char* pathname,int mode);
 int write_fd(int sockfd,void *ptr,size_t nbytes,int sendfd);
 int read_fd(int sockfd,void *ptr,size_t nbytes,int *recvfd);
+
+//非阻塞套接字
+void select_str_cli_noblock(int sockfd);

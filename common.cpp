@@ -116,6 +116,7 @@ void str_cli(int fd)
 	}
 }
 
+//阻塞套接字
 void select_str_cli(int fd)
 {
 	int max_fd;
@@ -154,6 +155,112 @@ void select_str_cli(int fd)
 			strcpy(copy,p);
 			Writen(fd, copy, strlen(copy));
 			delete [] copy;
+		}
+	}
+}
+
+//非阻塞型套接字
+void select_str_cli_noblock(int sockfd)
+{
+	int maxfd,val,flags,nread,nwrite;
+	char to[MAXLEN],fr[MAXLEN];
+	char *tooptr,*toiptr,*froptr,*friptr;
+	fd_set readset,writeset;
+
+	//非阻塞socket
+	val = fcntl(sockfd, F_GETFL,0);
+	fcntl(sockfd, F_SETFL,val | O_NONBLOCK);
+
+	//非阻塞输入
+	val = fcntl(STDIN_FILENO, F_GETFL,0);
+	fcntl(STDIN_FILENO, F_SETFL, val | O_NONBLOCK);
+
+	//非阻塞输出
+	val = fcntl(STDOUT_FILENO, F_GETFL, 0);
+	fcntl(STDOUT_FILENO, F_SETFL, val | O_NONBLOCK);
+
+	tooptr = toiptr = to;
+	froptr = friptr = fr;
+	maxfd = max(max(STDIN_FILENO, STDOUT_FILENO), sockfd);
+	flags = 0;//标识是否达到文件结尾
+
+	while(1)
+	{
+		FD_ZERO(&readset);
+		FD_ZERO(&writeset);
+		if(tooptr != &to[MAXLEN] && flags == 0)
+			FD_SET(STDIN_FILENO, &readset);
+		if(tooptr != toiptr)
+			FD_SET(sockfd, &writeset);
+		if(friptr != &fr[MAXLEN])
+			FD_SET(sockfd, &readset);
+		if(froptr != friptr)
+		{
+			cout<<"FD_SET STDOUT_FILENO"<<endl;
+			FD_SET(STDOUT_FILENO, &writeset);
+		}
+		select(maxfd+1, &readset, &writeset, NULL, NULL);
+
+		if(FD_ISSET(STDIN_FILENO, &readset))
+		{
+			if((nread = read(STDIN_FILENO, toiptr, &to[MAXLEN]-toiptr)) < 0)
+			{
+				if(errno != EWOULDBLOCK)//读缓冲区有数据
+					perror("read error");
+			}else if(nread == 0){//到文件结尾
+				cout<<"STDIN_FILENO 数据接受完成"<<endl;
+				flags = 1;
+				if(tooptr == toiptr)
+					shutdown(sockfd, SHUT_WR);//关闭写端
+			}else{
+				toiptr += nread;
+				FD_SET(STDOUT_FILENO, &writeset);
+			}
+		}
+
+		if(FD_ISSET(sockfd, &readset))
+		{
+			if((nread = (read(sockfd, friptr, &fr[MAXLEN]-friptr))) < 0)
+			{
+				if(errno != EWOULDBLOCK)
+					perror("read error");
+			}else if(nread == 0){
+				cout<<"socket 数据接受完成"<<endl;
+				if(flags)
+					return;
+			}else{
+				friptr += nread;
+				FD_SET(STDOUT_FILENO, &writeset);
+			}
+		}
+
+		if(FD_ISSET(STDOUT_FILENO, &writeset) && (friptr-froptr) > 0)
+		{
+			if((nwrite = write(STDOUT_FILENO, froptr, friptr-froptr)) < 0)
+			{
+				if(errno != EWOULDBLOCK)
+					perror("write errror to STDOUT_FILENO");
+			}else{
+				froptr += nwrite;
+				if(froptr == friptr)
+				froptr = friptr = fr;
+			}
+		}
+
+		if(FD_ISSET(sockfd, &writeset) && (toiptr-tooptr)>0)
+		{
+			if((nwrite = write(sockfd, tooptr, toiptr-tooptr)) < 0)
+			{
+				if(errno != EWOULDBLOCK)
+					perror("write sockfd error");
+			}else{
+				tooptr += nwrite;
+				if(tooptr == toiptr){
+					tooptr = toiptr = to;
+					if(flags)
+						shutdown(sockfd, SHUT_RD);
+				}
+			}
 		}
 	}
 }
