@@ -15,9 +15,12 @@
 #include <sys/select.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <netinet/in.h>
+#include <sys/ioctl.h>
+#include <net/if.h>
 
 using namespace std;
-#define SERVER_PORT 9000 
+#define SERVER_PORT 9000
 #define QENLEN 5
 #define MAXLEN 1024
 #define NDG 2000
@@ -71,3 +74,9 @@ int read_fd(int sockfd,void *ptr,size_t nbytes,int *recvfd);
 
 //非阻塞套接字
 void select_str_cli_noblock(int sockfd);
+
+//非阻塞的connect
+int connect_nonblock(int fd,const sockaddr* serveraddr,socklen_t serverlen,int nsec);
+
+//获取网络接口的信息
+int getInterfaceInfo(const char *name);

@@ -486,7 +486,6 @@ int tcp_connect(const char *hostname,const char *service)
 	}
 
 	freeaddrinfo(res);
-	cout<<"sockfd = "<<sockfd<<endl;
 	return sockfd;
 }
 
@@ -645,3 +644,51 @@ int my_open(const char* pathname,int mode)
 	close(sockfd[0]);
 	return fd;
 }
+
+//非阻塞的connect
+int connect_nonblock(int fd,const sockaddr* serveraddr,socklen_t serverlen,int nsec)
+{
+	int val,resault,error;
+	socklen_t len;
+	fd_set rset,wset;
+	timeval t;
+
+	val = fcntl(fd, F_GETFL,0);
+	fcntl(fd, F_SETFL,val | O_NONBLOCK);
+
+	if((resault = connect(fd, serveraddr, serverlen)) < 0)
+		if(errno != EINPROGRESS)
+			return -1;
+	if(resault == 0)//立马建立连接
+	{
+		cout<<"统一台主机"<<endl;
+		goto done;
+	}
+	FD_ZERO(&rset);
+	FD_SET(fd, &rset);
+	wset = rset;
+	t.tv_sec = nsec;
+	t.tv_usec = 0;
+	if(select(fd+1, &rset, &wset, NULL, nsec>0? &t:NULL) == 0)
+	{
+		close(fd);
+		cout<<"TIMEOUT"<<endl;
+		return -1;
+	}
+	if(FD_ISSET(fd, &rset) || FD_ISSET(fd, &wset))
+	{
+		len = sizeof(error);
+		if(getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &len) < 0)
+			return -1;
+	}
+
+	done:
+		fcntl(fd, F_SETFL,val);
+		if(error)//连接建立错误
+		{
+			close(fd);
+			errno = error;
+			return -1;
+		}
+		return 0;
+}	
